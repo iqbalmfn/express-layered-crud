@@ -30,13 +30,24 @@ app.get("/products/:id", async (req, res) => {
     where: { id: parseInt(productId) },
   });
 
-  const response = {
-    success: true,
-    message: "Successfully get product by id",
-    data: product,
-  };
+  let statusCode
+  let response
+  if (product) {
+    statusCode = 200;
+    response = {
+      success: true,
+      message: "Successfully get product by id",
+      data: product,
+    };
+  } else {
+    statusCode = 400;
+    response = {
+      success: false,
+      message: "Product not found",
+    };
+  }
 
-  res.send(response);
+  res.status(statusCode).send(response);
 });
 
 app.post(
