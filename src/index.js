@@ -24,6 +24,21 @@ app.get("/products", async (req, res) => {
   res.send(response);
 });
 
+app.get("/products/:id", async (req, res) => {
+  const productId = req.params.id;
+  const product = await prisma.product.findFirst({
+    where: { id: parseInt(productId) },
+  });
+
+  const response = {
+    success: true,
+    message: "Successfully get product by id",
+    data: product,
+  };
+
+  res.send(response);
+});
+
 app.post(
   "/products",
   // Validation middleware
@@ -40,10 +55,10 @@ app.post(
         acc[error.path] = error.msg;
         return acc;
       }, {});
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: 'Validation errors', 
-        errors: errorMessages
+        message: "Validation errors",
+        errors: errorMessages,
       });
     }
 
