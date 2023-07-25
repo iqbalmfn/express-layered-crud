@@ -1,6 +1,4 @@
-const { validationResult } = require("express-validator");
 const prisma = require("../db");
-const { successResponse, errorResponse } = require("../utils/response");
 
 const getAllProducts = async () => {
   const products = await prisma.product.findMany();
@@ -8,47 +6,28 @@ const getAllProducts = async () => {
   return products;
 };
 
-const getProductById = async (id) => {
-  let statusCode;
-  let response;
-
-  if (typeof id !== "number") {
-    statusCode = 400;
-    response = errorResponse("ID is not a number");
-  } else {
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
-    });
-
-    if (product) {
-      statusCode = 200;
-      response = successResponse(product, "Successfully get product by ID");
-    } else {
-      statusCode = 400;
-      response = errorResponse("Product not found");
-    }
-  }
+const getAllProductsWithPagination = async (page, pageSize) => {
+  const totalItems = await prisma.product.count();
+  const products = await prisma.product.findMany({
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  });
 
   return {
-    statusCode,
-    response,
+    totalItems,
+    products,
+    currentPage: page,
+    totalPages: Math.ceil(totalItems / pageSize),
+    pageSize,
   };
 };
 
-const formErrorValidation = (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    const errorMessages = errors.array().reduce((acc, error) => {
-      acc[error.path] = error.msg;
-      return acc;
-    }, {});
+const getProductById = async (id) => {
+  const product = await prisma.product.findUnique({
+    where: { id: id },
+  });
 
-    return res.status(400).json({
-      success: false,
-      message: "Validation errors",
-      errors: errorMessages,
-    });
-  }
+  return product;
 };
 
 const createProduct = async (productData) => {
@@ -59,9 +38,40 @@ const createProduct = async (productData) => {
   return product;
 };
 
+const updatedProductById = async (id, productData) => {
+  //cek product
+  const checkProduct = await getProductById(id);
+
+  if (checkProduct) {
+    const product = await prisma.product.update({
+      where: {
+        id: id,
+      },
+      data: productData,
+    });
+
+    return product
+  }
+};
+
+const deleteProductById = async (id) => {
+  //cek product
+  const checkProduct = await getProductById(id);
+
+  if (checkProduct) {
+    const product = await prisma.product.delete({
+      where: { id: id },
+    });
+
+    return product;
+  }
+};
+
 module.exports = {
   getAllProducts,
+  getAllProductsWithPagination,
   getProductById,
-  formErrorValidation,
-  createProduct
+  createProduct,
+  updatedProductById,
+  deleteProductById,
 };

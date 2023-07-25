@@ -1,29 +1,68 @@
 const express = require("express");
-const prisma = require("../db");
-const { body, validationResult } = require("express-validator");
+const { body } = require("express-validator");
 const {
   getAllProducts,
   getProductById,
-  formErrorValidation,
   createProduct,
+  deleteProductById,
+  updatedProductById,
+  getAllProductsWithPagination,
 } = require("./product.service");
-const { successResponse, errorResponse } = require("../utils/response");
+const {
+  successResponse,
+  errorResponse,
+  formErrorValidation,
+  paginationFormat,
+} = require("../utils/utils");
 
 const router = express.Router();
 
+let statusCode;
+let response;
+
 router.get("/", async (req, res) => {
-  const products = await getAllProducts();
+  if (req.query.page || req.query.pageSize) {
+    const page = Number(req.query.page) || 1;
+    const pageSize = Number(req.query.pageSize) || 10;
 
-  const response = successResponse(products, "Sucessfully get products");
+    const result = await getAllProductsWithPagination(page, pageSize);
 
-  res.send(response);
+    response = paginationFormat(
+      "Successfully get produtcs",
+      result.products,
+      result.totalItems,
+      result.currentPage,
+      result.totalPages,
+      pageSize
+    );
+  } else {
+    const products = await getAllProducts();
+
+    response = successResponse(products, "Sucessfully get products");
+  }
+
+  res.json(response);
 });
 
 router.get("/:id", async (req, res) => {
   const productId = req.params.id;
-  const product = await getProductById(productId);
 
-  res.status(product.statusCode).send(product.response);
+  if (isNaN(productId)) {
+    statusCode = 400;
+    response = errorResponse("ID is not a number");
+  } else {
+    const product = await getProductById(parseInt(productId));
+
+    if (product) {
+      statusCode = 200;
+      response = successResponse(product, "Successfully get product by ID");
+    } else {
+      statusCode = 400;
+      response = errorResponse("Product not found");
+    }
+  }
+
+  res.status(statusCode).send(response);
 });
 
 router.post(
@@ -53,54 +92,66 @@ router.post(
   }
 );
 
-router.put("/:id", async (req, res) => {
-  const productId = req.params.id;
-  const productData = req.body;
+router.put(
+  "/:id",
+  [
+    body("name").notEmpty().withMessage("Name is required"),
+    body("price").isNumeric().withMessage("Price must be a number"),
+  ],
+  async (req, res) => {
+    // Check if there are validation errors
+    formErrorValidation(req, res);
 
-  try {
-    const product = await prisma.product.update({
-      where: {
-        id: parseInt(productId),
-      },
-      data: productData,
-    });
+    const productId = req.params.id;
+    const productData = req.body;
 
-    const response = {
-      success: true,
-      message: "Successfully updated product",
-      data: product,
-    };
+    try {
+      if (isNaN(productId)) {
+        statusCode = 400;
+        response = errorResponse("ID is not a number");
+      } else {
+        const product = await updatedProductById(
+          parseInt(productId),
+          productData
+        );
 
-    res.status(200).send(response);
-  } catch (error) {
-    if (error.code === "P2025") {
-      res.status(404).send({
-        success: false,
-        message: "Product not found",
-      });
-    } else {
-      res.status(500).send({
-        success: false,
-        message: "An error occurred while updating the product",
-      });
+        if (!product) {
+          statusCode = 400;
+          response = errorResponse("Product not found");
+        } else {
+          statusCode = 200;
+          response = successResponse(product, "Successfully updated product");
+        }
+      }
+
+      res.status(statusCode).send(response);
+    } catch (error) {
+      res
+        .status(500)
+        .send(errorResponse("An error occurred while updating the product"));
     }
   }
-});
+);
 
 router.delete("/:id", async (req, res) => {
   const productId = req.params.id;
 
-  const product = await prisma.product.delete({
-    where: { id: parseInt(productId) },
-  });
+  if (isNaN(productId)) {
+    statusCode = 400;
+    response = errorResponse("ID is not a number");
+  } else {
+    const product = await deleteProductById(parseInt(productId));
 
-  const response = {
-    success: true,
-    message: "Successfully deleted products",
-    data: product,
-  };
+    if (!product) {
+      statusCode = 400;
+      response = errorResponse("Product not found");
+    } else {
+      statusCode = 200;
+      response = successResponse(product, "Successfully deleted product");
+    }
+  }
 
-  res.status(200).send(response);
+  res.status(statusCode).send(response);
 });
 
 module.exports = router;
